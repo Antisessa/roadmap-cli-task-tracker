@@ -1,38 +1,22 @@
 package main
 
 import (
+	"cli-task-tracker/internal/config"
+	"cli-task-tracker/internal/storage"
+	"cli-task-tracker/internal/task"
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 )
 
-type Status int
+const dataDir = "../data"
 
-const (
-	todo = iota
-	inProgress
-	done
-)
-
-type task struct {
-	Id          int
-	Description string
-	Status
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
-
-/*
-task-cli add "Buy groceries"
-
-task-cli update 1 "Buy groceries and cook dinner"
-*/
 func main() {
+	cfg := &config.Config{
+		Storage: storage.TaskReaderWriter{Path: dataDir},
+	}
+
 	flag.Parse()
 	args := flag.Args()
 
@@ -40,65 +24,25 @@ func main() {
 		fmt.Println("Not enough arguments. See 'help' instruction")
 	}
 
+	var err error
 	switch args[0] {
+	case `add`:
+		err = add(args[1:], cfg.Storage)
+	case `update`:
+		err = update(args[1:], cfg.Storage)
+	case `mark-in-progress`, `mark-done`:
+		err = setStatus(args, cfg.Storage)
+	case `list`:
+
+	default:
+		fallthrough
 	case `help`:
 		printHelp()
-	case `add`:
-		handleAdd(args[1:])
-	case `update`:
-
-	case `mark-in-progress`:
-
-	case `mark-done`:
-
-	case `list`:
 	}
-}
-
-func deleteFile(fileName string) {
-	fmt.Println("Удаляю невалидный файл", fileName)
-	err := os.Remove(fileName)
 	if err != nil {
-		panic(err.Error())
+		fmt.Println(err.Error())
 	}
-}
-
-func getLastId() int {
-	const dataDir = "../data"
-	files, err := os.ReadDir(dataDir)
-	if err != nil {
-		panic("Cannot open data's folder")
-	}
-
-	slices.Reverse(files)
-
-	for _, file := range files {
-		fileName := file.Name()
-		extension := filepath.Ext(fileName)
-
-		switch extension {
-		case ".gitkeep":
-			continue
-		case ".json":
-			clearFileName, _ := strings.CutSuffix(fileName, ".json")
-			res, err := strconv.Atoi(clearFileName)
-			if err != nil {
-				deleteFile(filepath.Join(dataDir, fileName))
-			} else {
-				return res
-			}
-		default:
-			deleteFile(filepath.Join(dataDir, fileName))
-		}
-	}
-	panic("Found no file, check data folder")
-}
-
-func handleAdd(args []string) {
-	if len(args) > 1 {
-		fmt.Println("Error! Check that task's name was correct. Tip -> put it in \"quotes\"")
-	}
-	fmt.Println(getLastId())
+	return
 
 }
 
@@ -125,4 +69,81 @@ func printHelp() {
 	fmt.Println("list - Listing tasks by status")
 	fmt.Println("Example - task-cli list `status`")
 	fmt.Println("list command supporting these statuses - done, todo, in-progress")
+}
+
+// task-cli add "Buy groceries"
+func add(args []string, trw storage.TaskReaderWriter) error {
+	if len(args) != 1 {
+		return fmt.Errorf("error! Check that task's name was correct. Tip -> put it in \"quotes\"")
+	}
+
+	var err error
+
+	newId, err := trw.LastId()
+	if err != nil {
+		return err
+	}
+
+	newTask := task.Task{
+		Id:          newId + 1,
+		Description: args[0],
+		Status:      task.Todo,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	err = trw.WriteTask(newTask)
+	return err
+}
+
+// task-cli update 1 "Buy groceries and cook dinner"
+func update(args []string, trw storage.TaskReaderWriter) error {
+	if len(args) != 2 {
+		return fmt.Errorf("error! Check format 'task_id newTaskName'. Tip -> put task's name in \"quotes\"")
+	}
+
+	taskId, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+
+	Task, err := trw.ReadTask(taskId)
+	if err != nil {
+		return err
+	}
+
+	Task.UpdateDescription(args[1])
+	err = trw.WriteTask(Task)
+	if err == nil {
+		fmt.Println("Successfully updated!")
+	}
+	return err
+}
+
+// task-cli mark-in-progress 1
+// task-cli mark-done 1
+func setStatus(args []string, trw storage.TaskReaderWriter) error {
+	if len(args) != 2 {
+		return fmt.Errorf("error! Check format 'mark-[in-progress | done] task_id'")
+	}
+	var err error
+
+	taskId, err := strconv.Atoi(args[0])
+	if err != nil {
+		return err
+	}
+
+	Task, err := trw.ReadTask(taskId)
+	if err != nil {
+		return err
+	}
+
+	if args[0] == `mark-in-progress` {
+		Task.UpdateStatus(task.InProgress)
+	} else {
+		Task.UpdateStatus(task.Done)
+	}
+
+	err = trw.WriteTask(Task)
+	return err
 }
