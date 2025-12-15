@@ -33,7 +33,7 @@ func main() {
 	case `mark-in-progress`, `mark-done`:
 		err = setStatus(args, cfg.Storage)
 	case `list`:
-
+		err = list(args[1:], cfg.Storage)
 	default:
 		fallthrough
 	case `help`:
@@ -112,7 +112,11 @@ func update(args []string, trw storage.TaskReaderWriter) error {
 		return err
 	}
 
-	Task.UpdateDescription(args[1])
+	err = Task.UpdateDescription(args[1])
+	if err != nil {
+		return err
+	}
+
 	err = trw.WriteTask(Task)
 	if err == nil {
 		fmt.Println("Successfully updated!")
@@ -127,8 +131,14 @@ func setStatus(args []string, trw storage.TaskReaderWriter) error {
 		return fmt.Errorf("error! Check format 'mark-[in-progress | done] task_id'")
 	}
 	var err error
+	var status task.Status
+	if args[0] == `mark-in-progress` {
+		status = task.InProgress
+	} else {
+		status = task.Done
+	}
 
-	taskId, err := strconv.Atoi(args[0])
+	taskId, err := strconv.Atoi(args[1])
 	if err != nil {
 		return err
 	}
@@ -138,12 +148,44 @@ func setStatus(args []string, trw storage.TaskReaderWriter) error {
 		return err
 	}
 
-	if args[0] == `mark-in-progress` {
-		Task.UpdateStatus(task.InProgress)
-	} else {
-		Task.UpdateStatus(task.Done)
+	err = Task.UpdateStatus(status)
+	if err != nil {
+		return err
 	}
 
 	err = trw.WriteTask(Task)
+	if err == nil {
+		fmt.Println("Successfully set status", status, "to task with id", Task.Id)
+		fmt.Println(Task.String())
+	}
+	return err
+}
+
+func list(args []string, trw storage.TaskReaderWriter) error {
+	filterStatus := task.None
+	if len(args) > 1 {
+		return fmt.Errorf("error! Check format `list [ todo | in-progress | done ]`")
+	} else if len(args) > 0 {
+		switch args[0] {
+		case "todo":
+			filterStatus = task.Todo
+		case "in-progress":
+			filterStatus = task.InProgress
+		case "done":
+			filterStatus = task.Done
+		default:
+			return fmt.Errorf("error! Unknown status. Allowed - todo, in-progress or done")
+		}
+	}
+
+	tasks, err := trw.ReadAllByFilter(task.Status(filterStatus))
+	if err != nil {
+		return err
+	}
+
+	for _, Task := range tasks {
+		fmt.Println(Task.String())
+	}
+
 	return err
 }

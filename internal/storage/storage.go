@@ -56,6 +56,67 @@ func (trw TaskReaderWriter) ReadTask(id int) (task.Task, error) {
 	return res, err
 }
 
+func (trw TaskReaderWriter) ReadAllByFilter(filterStatus task.Status) ([]task.Task, error) {
+	files, err := os.ReadDir(trw.Path)
+	if err != nil {
+		return []task.Task{}, err
+	}
+
+	errFlag := false
+	tasks := make([]task.Task, 0, len(files))
+
+	for _, file := range files {
+		fileName := file.Name()
+		extension := filepath.Ext(fileName)
+
+		switch extension {
+		case ".gitkeep":
+			continue
+		case ".json":
+			clearName, found := strings.CutSuffix(fileName, ".json")
+			if !found {
+				fmt.Println("Cannot clear name from extension")
+				_ = deleteFile(filepath.Join(trw.Path, fileName))
+				errFlag = true
+			}
+
+			var taskId int
+			taskId, err = strconv.Atoi(clearName)
+			if err != nil {
+				fmt.Println("Cannot parse taskId")
+				_ = deleteFile(filepath.Join(trw.Path, fileName))
+				errFlag = true
+				continue
+			}
+
+			var newTask task.Task
+			newTask, err = trw.ReadTask(taskId)
+			if err != nil {
+				fmt.Println("Cannot read task from file")
+				_ = deleteFile(filepath.Join(trw.Path, fileName))
+				errFlag = true
+				continue
+			}
+			if filterStatus == task.None || filterStatus == newTask.Status {
+				tasks = append(tasks, newTask)
+			}
+
+		default:
+			fmt.Println("Unknown file extension")
+			_ = deleteFile(filepath.Join(trw.Path, fileName))
+			errFlag = true
+		}
+	}
+
+	if len(tasks) == 0 && errFlag {
+		err = errors.New("all tasks was corrupted")
+	} else if len(tasks) == 0 && len(files) > 1 {
+		fmt.Println("Found no tasks")
+	}
+
+	return tasks, err
+}
+
 func (trw TaskReaderWriter) writeToFile(task task.Task, file *os.File) error {
 	writer := bufio.NewWriter(file)
 
@@ -116,7 +177,7 @@ func (trw TaskReaderWriter) LastId() (int, error) {
 	return res, nil
 }
 
-func deleteFile(fileName string) error {
-	fmt.Println("Удаляю невалидный файл", fileName)
-	return os.Remove(fileName)
+func deleteFile(filePath string) error {
+	fmt.Println("Удаляю невалидный файл", filePath)
+	return os.Remove(filePath)
 }
