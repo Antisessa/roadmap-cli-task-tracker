@@ -1,6 +1,6 @@
-# Название проекта
+# CLI Task tracker
 
-Краткое описание CLI-приложения: что делает, для кого и зачем.
+Project idea - https://roadmap.sh/projects/task-tracker
 
 ## Возможности
 
@@ -13,7 +13,7 @@
 
 ## Установка из исходников
 
-- ~/make build
+- `~/make build`
 
 ### Предварительные требования
 
