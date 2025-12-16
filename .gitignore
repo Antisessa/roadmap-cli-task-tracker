@@ -28,6 +28,7 @@ go.work.sum
 .env
 
 data/
+bin/*
 
 !data/.gitkeep
 
