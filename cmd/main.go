@@ -30,6 +30,8 @@ func main() {
 		err = add(args[1:], cfg.Storage)
 	case `update`:
 		err = update(args[1:], cfg.Storage)
+	case `delete`:
+		err = deleteTask(args[1:], cfg.Storage)
 	case `mark-in-progress`, `mark-done`:
 		err = setStatus(args, cfg.Storage)
 	case `list`:
@@ -122,6 +124,20 @@ func update(args []string, trw storage.TaskReaderWriter) error {
 		fmt.Println("Successfully updated!")
 	}
 	return err
+}
+
+func deleteTask(args []string, trw storage.TaskReaderWriter) error {
+	if len(args) > 1 {
+		return fmt.Errorf("error! Check format `delete [task_id]`")
+	}
+
+	taskId, err := strconv.Atoi(args[1])
+	if err != nil {
+		return err
+	}
+
+	return trw.DeleteTask(taskId)
+
 }
 
 // task-cli mark-in-progress 1

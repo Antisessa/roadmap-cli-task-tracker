@@ -56,6 +56,12 @@ func (trw TaskReaderWriter) ReadTask(id int) (task.Task, error) {
 	return res, err
 }
 
+func (trw TaskReaderWriter) DeleteTask(id int) error {
+	filename := strconv.Itoa(id) + ".json"
+
+	return os.Remove(filepath.Join(trw.Path, filename))
+}
+
 func (trw TaskReaderWriter) ReadAllByFilter(filterStatus task.Status) ([]task.Task, error) {
 	files, err := os.ReadDir(trw.Path)
 	if err != nil {
